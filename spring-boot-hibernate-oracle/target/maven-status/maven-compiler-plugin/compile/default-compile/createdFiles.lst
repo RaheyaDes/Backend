@@ -1,6 +1,9 @@
 com\bezkoder\spring\oracle\repository\UsuarioRepository.class
 com\bezkoder\spring\oracle\SpringBootOracleApplication.class
+com\bezkoder\spring\oracle\util\CorsConfig$1.class
+com\bezkoder\spring\oracle\util\CorsConfig.class
 com\bezkoder\spring\oracle\model\Usuario.class
 com\bezkoder\spring\oracle\model\LoginRequest.class
 com\bezkoder\spring\oracle\util\PasswordUtil.class
+com\bezkoder\spring\oracle\util\UsuarioFieldValidator.class
 com\bezkoder\spring\oracle\controller\UsuarioController.class

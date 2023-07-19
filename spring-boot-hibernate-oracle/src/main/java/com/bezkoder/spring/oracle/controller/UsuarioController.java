@@ -5,18 +5,17 @@ import com.bezkoder.spring.oracle.model.LoginRequest;
 import com.bezkoder.spring.oracle.model.Usuario;
 import com.bezkoder.spring.oracle.repository.UsuarioRepository;
 import com.bezkoder.spring.oracle.util.PasswordUtil;
+import com.bezkoder.spring.oracle.util.UsuarioFieldValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+@CrossOrigin(origins = "http://localhost:8081")
 @RestController
 @RequestMapping("/api")
 public class UsuarioController {
@@ -26,22 +25,22 @@ public class UsuarioController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @RequestMapping(value = "/searchUsersByStatus/{status}", method = RequestMethod.GET)
-    public ResponseEntity<List<Usuario>> searchUsuariosByStatus(@PathVariable("status") String status) {
-        try {
-            List<Usuario> users = new ArrayList<Usuario>();
+        @RequestMapping(value = "/searchUsersByStatus/{status}", method = RequestMethod.GET)
+        public ResponseEntity<List<Usuario>> searchUsuariosByStatus(@PathVariable("status") String status) {
+            try {
+                List<Usuario> users = new ArrayList<Usuario>();
 
-            usuarioRepository.findByStatus(status).forEach(users::add);
+                usuarioRepository.findByStatus(status).forEach(users::add);
 
-            if (users.isEmpty()) {
-                return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+                if (users.isEmpty()) {
+                    return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+                }
+
+                return new ResponseEntity<>(users, HttpStatus.OK);
+            } catch (Exception e) {
+                return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
             }
-
-            return new ResponseEntity<>(users, HttpStatus.OK);
-        } catch (Exception e) {
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
 
 
     @RequestMapping(value = "/searchUsers/all", method = RequestMethod.GET)
@@ -68,6 +67,11 @@ public class UsuarioController {
             usuario.setPassword(encryptedPassword);
             usuario.setNoAcceso(0);
 
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(new Date());
+            calendar.add(Calendar.DAY_OF_MONTH, 1);
+            usuario.setFechaVigencia(calendar.getTime());
+
             Usuario createdUsuario = usuarioRepository.save(usuario);
 
             return new ResponseEntity<>(createdUsuario, HttpStatus.CREATED);
@@ -87,15 +91,24 @@ public class UsuarioController {
         if (usuario != null) {
             String storedPassword = usuario.getPassword();
 
-            if (PasswordUtil.encryptPassword(password).equals(storedPassword)) {
-                usuario.setNoAcceso(usuario.getNoAcceso() + 1);
-                usuarioRepository.save(usuario);
-                return ResponseEntity.ok("Login successful");
+            // Validate if the password is correct
+            if (PasswordUtil.encryptPassword(password).equals(storedPassword) && usuario.getStatus().equals("A")) {
+                Date today = new Date();
+
+                // Check if FechaVigencia is greater than or equal to today
+                if (usuario.getFechaVigencia() != null && usuario.getFechaVigencia().compareTo(today) >= 0) {
+                    usuario.setNoAcceso(usuario.getNoAcceso() + 1);
+                    usuarioRepository.save(usuario);
+                    return ResponseEntity.ok("Login successful");
+                } else {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User account has expired");
+                }
             }
         }
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
     }
+
 
 
 
@@ -106,12 +119,8 @@ public class UsuarioController {
             Optional<Usuario> optionalUsuario = usuarioRepository.findById(login);
 
             if (optionalUsuario.isPresent()) {
-                Usuario updatedUsuario = optionalUsuario.get();
-                updatedUsuario.setNombre(usuario.getNombre());
-                updatedUsuario.setEmail(usuario.getEmail());
-                updatedUsuario.setStatus(usuario.getStatus());
-                updatedUsuario.setFechaModificacion(new Date());
-
+                Usuario existingUsuario = optionalUsuario.get();
+                Usuario updatedUsuario = UsuarioFieldValidator.updateUsuarioFields(existingUsuario, usuario);
                 usuarioRepository.save(updatedUsuario);
 
                 return new ResponseEntity<>(updatedUsuario, HttpStatus.OK);
@@ -122,6 +131,7 @@ public class UsuarioController {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
 
     @DeleteMapping("/delete/{login}")
     public ResponseEntity<HttpStatus> deleteUsuario(@PathVariable("login") String login) {
